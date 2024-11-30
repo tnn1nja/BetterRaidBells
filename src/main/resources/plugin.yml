@@ -1,0 +1,6 @@
+name: BetterRaidBells
+version: '0.0.1'
+main: net.tnn1nja.betterRaidBells.BetterRaidBells
+api-version: '1.21'
+authors: [ tnn1nja ]
+description: Tinkering for the Nostalgia Server
