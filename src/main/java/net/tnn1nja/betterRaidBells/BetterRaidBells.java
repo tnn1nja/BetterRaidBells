@@ -16,6 +16,8 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Random;
 import java.util.logging.Logger;
 
 public final class BetterRaidBells extends JavaPlugin implements Listener {
@@ -23,6 +25,7 @@ public final class BetterRaidBells extends JavaPlugin implements Listener {
     Logger log = Bukkit.getLogger();
     int vanillaDetectionRadius = 32;
     int customDetectionRadius = 128;
+    HashSet<Location> bellOnCooldownLocations = new HashSet<Location>();
 
     @Override
     public void onEnable() {
@@ -39,23 +42,27 @@ public final class BetterRaidBells extends JavaPlugin implements Listener {
     public void onBellRing(BellRingEvent e){
         Location l = e.getBlock().getLocation();
         if(!isRaidersWithinVanillaRange(l)){
-            Bukkit.getScheduler().runTaskLater(this, new Runnable() {
-                @Override
-                public void run() {
-                    for(LivingEntity le: getRaidersWithinCustomRange(l)){
-                        le.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 60, 0));
+            Collection<Raider> raiders = getRaidersWithinCustomRange(l);
+            if(!raiders.isEmpty() && !bellOnCooldownLocations.contains(l)) {
+                Bukkit.getScheduler().runTaskLater(this, new Runnable() {
+                    @Override
+                    public void run() {
+                        for (LivingEntity le: raiders) {
+                            le.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 60, 0));
+                        }
                     }
-                }
-            }, 5L);
-            Bukkit.getScheduler().runTaskLater(this, new Runnable() {
-                @Override
-                public void run() {
-                    for(Player p: Bukkit.getOnlinePlayers()){
-                        p.playSound(l, Sound.BLOCK_BELL_RESONATE, 1, 1);
+                }, 60L);
+                Bukkit.getScheduler().runTaskLater(this, new Runnable() {
+                    @Override
+                    public void run() {
+                        for (Player p : Bukkit.getOnlinePlayers()) {
+                            p.playSound(l, Sound.BLOCK_BELL_RESONATE, 1, getRandomPitch());
+                        }
                     }
-                }
-            }, 3L);
-            log.info("[BetterRaidBells] Bell resonated with range of " + customDetectionRadius + " blocks.");
+                }, 10L);
+                startBellCooldown(l);
+                log.info("[BetterRaidBells] Bell resonated with range of " + customDetectionRadius + " blocks.");
+            }
         }
     }
 
@@ -63,6 +70,7 @@ public final class BetterRaidBells extends JavaPlugin implements Listener {
     public void onBellResonate(BellResonateEvent e){
         Location l = e.getBlock().getLocation();
         e.getResonatedEntities().addAll(getRaidersWithinCustomRange(l));
+        startBellCooldown(l);
         log.info("[BetterRaidBells] Bell resonation range extended to " + customDetectionRadius + " blocks.");
     }
 
@@ -77,6 +85,21 @@ public final class BetterRaidBells extends JavaPlugin implements Listener {
         return false;
     }
 
+    public void startBellCooldown(Location l){
+        bellOnCooldownLocations.add(l);
+        Bukkit.getScheduler().runTaskLater(this, new Runnable() {
+            @Override
+            public void run() {
+                bellOnCooldownLocations.remove(l);
+            }
+        }, 60L);
+    }
+
+    public float getRandomPitch(){
+        float[] pitches = new float[]{0.85F, 0.9F, 1.0F};
+        return pitches[new Random().nextInt(pitches.length)];
+    }
+
     public boolean isWithinSphere(Location entityLocation, Location bellLocation, int radius){
         return Math.pow((bellLocation.getX() - entityLocation.getX()), 2) +
                 Math.pow((bellLocation.getY() - entityLocation.getY()), 2) +
@@ -84,12 +107,12 @@ public final class BetterRaidBells extends JavaPlugin implements Listener {
                 <= Math.pow(radius, 2);
     }
 
-    public Collection<LivingEntity> getRaidersWithinCustomRange(Location bellLocation){
+    public Collection<Raider> getRaidersWithinCustomRange(Location bellLocation){
         return bellLocation.getWorld().getNearbyEntities(bellLocation,
                 customDetectionRadius, customDetectionRadius, customDetectionRadius,
                 entity -> entity instanceof Raider &&
                         isWithinSphere(entity.getLocation(), bellLocation, customDetectionRadius)).
-                stream().map(entity -> (LivingEntity) entity).toList();
+                stream().map(entity -> (Raider) entity).toList();
     }
 
 }
